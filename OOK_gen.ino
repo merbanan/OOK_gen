@@ -29,9 +29,11 @@ String inputString        = "";         // a string to hold incoming data
 unsigned int modulation   = 0;          // PWM = 0, PPM = 1
 unsigned int repeats      = 5;          // signal repeats
 unsigned int bits         = 36;         // amount of bits in a packet
-unsigned int zero_len     = 250;       // length of 0 (in us)
-unsigned int one_len      = 1250;        // length of 1 (in us)
-unsigned int pd_len       = 250;        // pulse/distance length (in us)
+unsigned int pd_len       = 2000;        // pulse/distance length (in us)
+unsigned int zero_len     = 250;        // length of 0 (in us)
+unsigned int zero_len_left= pd_len-zero_len;        // length of 0 (in us)
+unsigned int one_len      = 1250;       // length of 1 (in us)
+unsigned int one_len_left = pd_len-one_len;        // length of 0 (in us)
 unsigned int pause_len    = 10000;      // pause length (in us), time between packets
 unsigned int preamble     = 2500;       // preamble length (in us)
 unsigned int invert       = 0;          // invert the bits before transmit
@@ -116,7 +118,7 @@ int get_bit() {
 int transmit_signal() {
   int i,j;
   int bit;
-
+  int pwm_bl;
 
   // send preamble - not implemented
 
@@ -130,10 +132,10 @@ int transmit_signal() {
       bit = get_bit();
       if (modulation == MOD_PPM) {
         digitalWrite(OOK_PIN, HIGH);
-        digitalWrite(LED_PIN, HIGH);
+//        digitalWrite(LED_PIN, HIGH);
         delayMicroseconds(pd_len);
         digitalWrite(OOK_PIN, LOW);
-        digitalWrite(LED_PIN, LOW);   
+//        digitalWrite(LED_PIN, LOW);   
         if (bit) {
           delayMicroseconds(one_len);
         } else {
@@ -141,15 +143,20 @@ int transmit_signal() {
         }
       } else if (modulation == MOD_PWM) {
         digitalWrite(OOK_PIN, HIGH);
-        digitalWrite(LED_PIN, HIGH);
+//        digitalWrite(LED_PIN, HIGH);
         if (bit) {
           delayMicroseconds(one_len);
+          pwm_bl = one_len;
+          digitalWrite(OOK_PIN, LOW);
+//          digitalWrite(LED_PIN, LOW);
+          delayMicroseconds(pd_len-pwm_bl);
         } else {
           delayMicroseconds(zero_len);
+          pwm_bl = zero_len;
+          digitalWrite(OOK_PIN, LOW);
+//          digitalWrite(LED_PIN, LOW);
+          delayMicroseconds(pd_len-pwm_bl);
         }
-        digitalWrite(OOK_PIN, LOW);
-        digitalWrite(LED_PIN, LOW);
-        delayMicroseconds(pd_len);
       } else {
         return -1; 
       }
@@ -158,10 +165,10 @@ int transmit_signal() {
     // Send ending PPM pulse
     if (modulation == MOD_PPM) {
         digitalWrite(OOK_PIN, HIGH);
-        digitalWrite(LED_PIN, HIGH);
+//        digitalWrite(LED_PIN, HIGH);
         delayMicroseconds(pd_len);
         digitalWrite(OOK_PIN, LOW);
-        digitalWrite(LED_PIN, LOW);    
+//        digitalWrite(LED_PIN, LOW);    
     }
     // delay between packets
     delayMicroseconds(pause_len);
@@ -235,6 +242,7 @@ void loop()
           }
           if (inputString.length() > 3) {
             zero_len = inputString.substring(2,inputString.length()).toInt();  // the hard way
+            zero_len_left = pd_len-zero_len;
           }
           break;
         case 'o':
@@ -248,11 +256,15 @@ void loop()
           break;
         case 'd':
           if (inputString.length() == 2) {
-            Serial.print("Pulse / Distance length: ");
+            Serial.print("Pulse / Distance length(pd/z/o): ");
             Serial.println(pd_len);
+            Serial.println(zero_len_left);
+            Serial.println(one_len_left);
           }
           if (inputString.length() > 3) {
             pd_len = inputString.substring(2,inputString.length()).toInt();  // the hard way
+            zero_len_left = pd_len-zero_len;
+            one_len_left  = pd_len-one_len;
           }
           break;
         case 'e':
@@ -261,7 +273,7 @@ void loop()
             Serial.println(pause_len);
           }
           if (inputString.length() > 3) {
-            pd_len = inputString.substring(2,inputString.length()).toInt();  // the hard way
+            pause_len = inputString.substring(2,inputString.length()).toInt();  // the hard way
           }
           break;
         case 'a':
