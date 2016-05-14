@@ -18,8 +18,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 
 */
 
-#define OOK_PIN 12
-#define LED_PIN 13
+#define OOK_PIN 15
+#define LED_PIN 17
 
 #define MOD_PPM 1
 #define MOD_PWM 0
@@ -29,11 +29,11 @@ String inputString        = "";         // a string to hold incoming data
 unsigned int modulation   = 0;          // PWM = 0, PPM = 1
 unsigned int repeats      = 5;          // signal repeats
 unsigned int bits         = 36;         // amount of bits in a packet
-unsigned int pd_len       = 2000;        // pulse/distance length (in us)
-unsigned int zero_len     = 250;        // length of 0 (in us)
-unsigned int zero_len_left= pd_len-zero_len;        // length of 0 (in us)
-unsigned int one_len      = 1250;       // length of 1 (in us)
-unsigned int one_len_left = pd_len-one_len;        // length of 0 (in us)
+unsigned int pd_len       = 2000;       // pulse/distance length (in us)
+unsigned int zero_ca_len  = 250;        // length of 0 (in us)
+unsigned int zero_ci_len  = 1250;       // length of 0 (in us)
+unsigned int one_ca_len   = 1250;       // length of 1 (in us)
+unsigned int one_ci_len   = 250;        // length of 0 (in us)
 unsigned int pause_len    = 10000;      // pause length (in us), time between packets
 unsigned int preamble     = 2500;       // preamble length (in us)
 unsigned int invert       = 0;          // invert the bits before transmit
@@ -41,6 +41,7 @@ char packet_buf[256]      = {0};        // packet payload buffer
 unsigned int pbuf_len     = 0;          // payload buffer length
 
 unsigned int bit_pos      = 0;          // bit reader bit position
+int carrier_mode          = 0;
 void setup()
 {
   // initialize digital pin 13 as an output.
@@ -122,6 +123,12 @@ int transmit_signal() {
 
   // send preamble - not implemented
 
+  // support leds on Leonardo and Pro Micro
+  if (LED_PIN == 13)
+    digitalWrite(LED_PIN, HIGH);
+  else
+    digitalWrite(LED_PIN, LOW);
+
   // repeats
   for (j=0 ; j<repeats ; j++) {
     // reset bit reader
@@ -130,32 +137,16 @@ int transmit_signal() {
     // send bits
     for (i=0 ; i<bits ; i++) {
       bit = get_bit();
-      if (modulation == MOD_PPM) {
+      if ((modulation==MOD_PPM) || (modulation==MOD_PWM)) {
         digitalWrite(OOK_PIN, HIGH);
-//        digitalWrite(LED_PIN, HIGH);
-        delayMicroseconds(pd_len);
-        digitalWrite(OOK_PIN, LOW);
-//        digitalWrite(LED_PIN, LOW);   
         if (bit) {
-          delayMicroseconds(one_len);
-        } else {
-          delayMicroseconds(zero_len);
-        }
-      } else if (modulation == MOD_PWM) {
-        digitalWrite(OOK_PIN, HIGH);
-//        digitalWrite(LED_PIN, HIGH);
-        if (bit) {
-          delayMicroseconds(one_len);
-          pwm_bl = one_len;
+          delayMicroseconds(one_ca_len);
           digitalWrite(OOK_PIN, LOW);
-//          digitalWrite(LED_PIN, LOW);
-          delayMicroseconds(pd_len-pwm_bl);
+          delayMicroseconds(one_ci_len);
         } else {
-          delayMicroseconds(zero_len);
-          pwm_bl = zero_len;
+          delayMicroseconds(zero_ca_len);
           digitalWrite(OOK_PIN, LOW);
-//          digitalWrite(LED_PIN, LOW);
-          delayMicroseconds(pd_len-pwm_bl);
+          delayMicroseconds(zero_ci_len);
         }
       } else {
         return -1; 
@@ -173,6 +164,13 @@ int transmit_signal() {
     // delay between packets
     delayMicroseconds(pause_len);
   }
+
+  // support leds on Leonardo and Pro Micro
+  if (LED_PIN == 13)
+    digitalWrite(LED_PIN, LOW);
+  else
+    digitalWrite(LED_PIN, HIGH);
+
   return 0;
 }
 
@@ -237,34 +235,48 @@ void loop()
           break;
         case 'z':
           if (inputString.length() == 2) {
-            Serial.print("Zero length: ");
-            Serial.println(zero_len);
+            Serial.print("Zero ca length: ");
+            Serial.println(zero_ca_len);
           }
           if (inputString.length() > 3) {
-            zero_len = inputString.substring(2,inputString.length()).toInt();  // the hard way
-            zero_len_left = pd_len-zero_len;
+            zero_ca_len = inputString.substring(2,inputString.length()).toInt();  // the hard way
+          }
+          break;
+        case 'x':
+          if (inputString.length() == 2) {
+            Serial.print("Zero ci length: ");
+            Serial.println(zero_ci_len);
+          }
+          if (inputString.length() > 3) {
+            zero_ci_len = inputString.substring(2,inputString.length()).toInt();  // the hard way
           }
           break;
         case 'o':
           if (inputString.length() == 2) {
-            Serial.print("One length: ");
-            Serial.println(one_len);
+            Serial.print("One ca length: ");
+            Serial.println(one_ca_len);
           }
           if (inputString.length() > 3) {
-            one_len = inputString.substring(2,inputString.length()).toInt();  // the hard way
+            one_ca_len = inputString.substring(2,inputString.length()).toInt();  // the hard way
           }
           break;
+        case 'u':
+          if (inputString.length() == 2) {
+            Serial.print("One ci length: ");
+            Serial.println(one_ci_len);
+          }
+          if (inputString.length() > 3) {
+            one_ci_len = inputString.substring(2,inputString.length()).toInt();  // the hard way
+          }
+          break;
+
         case 'd':
           if (inputString.length() == 2) {
             Serial.print("Pulse / Distance length(pd/z/o): ");
             Serial.println(pd_len);
-            Serial.println(zero_len_left);
-            Serial.println(one_len_left);
           }
           if (inputString.length() > 3) {
             pd_len = inputString.substring(2,inputString.length()).toInt();  // the hard way
-            zero_len_left = pd_len-zero_len;
-            one_len_left  = pd_len-one_len;
           }
           break;
         case 'e':
@@ -304,6 +316,7 @@ void loop()
           }
           break;
         case 't':
+            {
             int res = transmit_signal();
             if (!res)
               Serial.println("OK");
@@ -311,9 +324,22 @@ void loop()
               Serial.print("FAIL: ");
               Serial.println(res);
             }
+            }
+          break;
+        case 's':
+          if (inputString.length() == 2) {
+            Serial.print("Carrier mode: ");
+            Serial.println(carrier_mode);
+          }
+          if (inputString.length() > 3) {
+            carrier_mode = inputString[2]-'0';   // the easy way
+            if (carrier_mode)
+              digitalWrite(OOK_PIN, HIGH);
+            else
+              digitalWrite(OOK_PIN, LOW);
+          }
           break;
         }
-
       // reset command line buffer
       inputString = "";
       Serial.print("> ");
